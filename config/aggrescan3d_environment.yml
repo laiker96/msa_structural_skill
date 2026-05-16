@@ -1,0 +1,12 @@
+name: aggrescan3d
+# Dedicated Aggrescan3D environment.
+#
+# The original PyPI release is Python 2-only. The speleo3 conda build provides
+# a Python 3-compatible command-line `aggrescan` entry point, which is what the
+# batch structural/aggregation analyses use. The optional `a3d_server` web UI is
+# not required for the pipeline.
+channels:
+  - speleo3
+  - conda-forge
+dependencies:
+  - aggrescan3d=1.1.1
