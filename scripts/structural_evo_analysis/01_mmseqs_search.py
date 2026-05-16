@@ -28,6 +28,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--db-name", default=cfg.DEFAULT_DB_NAME)
     parser.add_argument("--db-fasta", type=Path, default=cfg.DEFAULT_DB_FASTA)
     parser.add_argument("--db-mmseqs", type=Path, default=cfg.DEFAULT_DB_MMSEQS)
+    parser.add_argument(
+        "--ogt-metadata",
+        type=Path,
+        default=cfg.DEFAULT_OGT_TSV,
+        help="Optional OGTFinder-style TSV used to add taxid-derived OGT/regime metadata.",
+    )
+    parser.add_argument("--no-ogt", action="store_true", help="Do not join OGT/regime metadata.")
     parser.add_argument("--sensitivity", type=float, default=float(os.environ.get("SEA_MMSEQS_S", "7.5")))
     parser.add_argument("--evalue", default=os.environ.get("SEA_MMSEQS_E", "1e-5"))
     parser.add_argument("--min-seq-id", type=float, default=float(os.environ.get("SEA_MIN_SEQ_ID", "0.05")))
@@ -46,7 +53,7 @@ def parse_args() -> argparse.Namespace:
 def require_mmseqs() -> str:
     mmseqs = cfg.resolve_bin("mmseqs")
     if shutil.which(mmseqs) is None and not Path(mmseqs).exists():
-        raise SystemExit("ERROR: mmseqs not found. Activate ./envs/ankros or add mmseqs to PATH.")
+        raise SystemExit("ERROR: mmseqs not found. Activate ./envs/structural_evo or add mmseqs to PATH.")
     return mmseqs
 
 
@@ -143,6 +150,7 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
         found = extract_hits(set(hits), args.db_fasta, all_fa)
         print(f"Extracted {found}/{len(hits)} database hits into {all_fa}")
     entries = cfg.read_fasta(all_fa)
+    lookup = None if args.no_ogt else cfg.OGTFinderLookup(args.ogt_metadata)
     rows = []
     filtered = [(query_sid, query_header, query_seq)]
     for sid, header, seq in entries:
@@ -151,10 +159,14 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
             continue
         reasons = filter_reasons(row, seq, args)
         accession = cfg.normalize_accession(sid)
+        taxid = cfg.extract_taxid(header)
+        organism = cfg.extract_organism(header)
         clean = cfg.clean_sequence(seq)
         meta = {
             "id": sid,
             "accession": accession,
+            "taxid": taxid,
+            "organism": organism,
             "header": header,
             "length": len(clean),
             "pident": f"{float(row['pident']):.3f}",
@@ -165,12 +177,16 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
             "passes_default_filters": "yes" if not reasons else "no",
             "filter_reasons": ";".join(reasons),
         }
+        if lookup is not None:
+            meta.update(lookup.lookup(taxid, organism))
         rows.append(meta)
         if not reasons:
             filtered.append((sid, header, clean))
     query_meta = {
         "id": query_sid,
         "accession": cfg.normalize_accession(query_sid),
+        "taxid": cfg.extract_taxid(query_header),
+        "organism": cfg.extract_organism(query_header),
         "header": query_header,
         "length": len(query_seq),
         "pident": "100.000",
@@ -181,10 +197,12 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
         "passes_default_filters": "query",
         "filter_reasons": "",
     }
+    if lookup is not None:
+        query_meta.update(lookup.lookup(query_meta["taxid"], query_meta["organism"]))
     fields = [
-        "id", "accession", "header", "length", "pident", "qcov", "tcov",
+        "id", "accession", "taxid", "organism", "header", "length", "pident", "qcov", "tcov",
         "evalue", "bits", "passes_default_filters", "filter_reasons",
-    ]
+    ] + ([] if lookup is None else cfg.OGTFinderLookup.fields)
     cfg.write_tsv(args.out_dir / "hits_metadata.tsv", rows, fields)
     cfg.write_tsv(args.out_dir / "repset_metadata.tsv", [query_meta] + rows, fields)
     cfg.write_fasta(filtered, args.out_dir / "repset.fa")

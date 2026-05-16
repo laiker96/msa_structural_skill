@@ -1,44 +1,27 @@
 # structures/
 
-External structural data pools used by the active pipelines.
+Local structure inputs and downloaded model caches.
 
-Large structure files are gitignored. The active FAD/FMN holo builder does not
-read crystals or derived holo models from this directory; it stages its own
-crystal inputs and writes its own outputs under `results/structural/`.
-
-## Layout
+Large generated/downloaded structures should stay out of git. The generalized
+pipeline writes AlphaFold DB downloads here by default:
 
 ```text
-structures/
-├── README.md
-├── af3/        AlphaFold 3 server predictions, extracted from submitted jobs
-└── afdb/       AlphaFold DB models for MSA representatives
+structures/structural_evo_analysis/afdb/
 ```
 
-Retired legacy crystal, ligand-template, and derived-holo folders were
-intentionally removed. Current crystal provenance for the holo builder lives in
-`results/structural/inputs/crystals/crystal_inputs.tsv`, and current holo model
-outputs live in `results/structural/docked_holo/`.
+Optional user-provided query structure:
 
-## Reproducing Current Contents
+```text
+structures/structural_evo_analysis/query.pdb
+```
 
-AFDB representative structures are downloaded by the MSA pipeline utility:
+Step 06 downloads AFDB PDB models from accessions in `repset_metadata.tsv`:
 
 ```bash
-python scripts/msa_OGT/13_download_afdb.py
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/06_download_afdb.py \
+  --metadata results/photoHymenobact_example/repset_metadata.tsv \
+  --dest structures/structural_evo_analysis/afdb
 ```
 
-AF3 server predictions require a manual server submission. After downloading a
-fresh `folds_*.zip` archive, extract it here:
-
-```bash
-rm -rf structures/af3
-unzip -q structures/folds_*.zip -d structures/af3
-```
-
-The active structural holo builder stages its required RCSB crystals into the
-results tree:
-
-```bash
-bash scripts/structural/run_pipeline.sh
-```
+Step 07 scores structures from this directory. Use `--skip-aggrescan3d` if the
+optional Aggrescan3D environment is not installed.

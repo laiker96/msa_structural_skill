@@ -181,89 +181,97 @@ def residue_key(row: dict[str, str]) -> tuple[str, str, int, str]:
     )
 
 
-def merge_per_residue(camsol_path: Path, aggrescan_path: Path) -> list[dict[str, object]]:
+def merge_per_residue(camsol_path: Path | None, aggrescan_path: Path | None) -> list[dict[str, object]]:
     rows: dict[tuple[str, str, int, str], dict[str, object]] = {}
-    for row in read_tsv(camsol_path):
-        key = residue_key(row)
-        rows[key] = {
-            "structure_id": row.get("structure_id", ""),
-            "source_path": row.get("source_path", ""),
-            "chain": row.get("chain", ""),
-            "resseq": row.get("resseq", ""),
-            "icode": row.get("icode", ""),
-            "residue_id": row.get("residue_id", ""),
-            "one_letter": row.get("one_letter", ""),
-            "camsol_intrinsic_solubility_score": row.get("intrinsic_solubility_score", ""),
-            "camsol_structural_solubility_score": row.get("structural_solubility_score", ""),
-        }
-
-    for row in read_tsv(aggrescan_path):
-        key = (row.get("structure_id", ""), row.get("chain", ""), int(row.get("resseq", "")), "")
-        merged = rows.setdefault(
-            key,
-            {
+    if camsol_path is not None:
+        for row in read_tsv(camsol_path):
+            key = residue_key(row)
+            rows[key] = {
                 "structure_id": row.get("structure_id", ""),
                 "source_path": row.get("source_path", ""),
                 "chain": row.get("chain", ""),
                 "resseq": row.get("resseq", ""),
-                "icode": "",
+                "icode": row.get("icode", ""),
                 "residue_id": row.get("residue_id", ""),
                 "one_letter": row.get("one_letter", ""),
-            },
-        )
-        score = row.get("aggrescan3d_score", "")
-        merged["aggrescan3d_score"] = score
-        try:
-            merged["aggrescan3d_positive"] = f"{max(0.0, float(score)):.6f}"
-        except ValueError:
-            merged["aggrescan3d_positive"] = ""
+                "camsol_intrinsic_solubility_score": row.get("intrinsic_solubility_score", ""),
+                "camsol_structural_solubility_score": row.get("structural_solubility_score", ""),
+            }
+
+    if aggrescan_path is not None:
+        for row in read_tsv(aggrescan_path):
+            key = (row.get("structure_id", ""), row.get("chain", ""), int(row.get("resseq", "")), "")
+            merged = rows.setdefault(
+                key,
+                {
+                    "structure_id": row.get("structure_id", ""),
+                    "source_path": row.get("source_path", ""),
+                    "chain": row.get("chain", ""),
+                    "resseq": row.get("resseq", ""),
+                    "icode": "",
+                    "residue_id": row.get("residue_id", ""),
+                    "one_letter": row.get("one_letter", ""),
+                },
+            )
+            score = row.get("aggrescan3d_score", "")
+            merged["aggrescan3d_score"] = score
+            try:
+                merged["aggrescan3d_positive"] = f"{max(0.0, float(score)):.6f}"
+            except ValueError:
+                merged["aggrescan3d_positive"] = ""
 
     return [rows[key] for key in sorted(rows, key=lambda item: (item[0], item[1], item[2], item[3]))]
 
 
-def merge_global(camsol_path: Path, aggrescan_path: Path) -> list[dict[str, object]]:
+def merge_global(camsol_path: Path | None, aggrescan_path: Path | None) -> list[dict[str, object]]:
     rows: dict[str, dict[str, object]] = {}
-    for row in read_tsv(camsol_path):
-        sid = row.get("structure_id", "")
-        rows[sid] = {
-            "structure_id": sid,
-            "source_path": row.get("source_path", ""),
-            "residue_count": row.get("residue_count", ""),
-            "global_intrinsic_solubility_score": row.get("global_intrinsic_solubility_score", ""),
-            "global_structural_solubility_score": row.get("global_structural_solubility_score", ""),
-            "v2_intrinsic_solubility_score": row.get("v2_intrinsic_solubility_score", ""),
-            "v2_structural_solubility_score": row.get("v2_structural_solubility_score", ""),
-        }
+    if camsol_path is not None:
+        for row in read_tsv(camsol_path):
+            sid = row.get("structure_id", "")
+            rows[sid] = {
+                "structure_id": sid,
+                "source_path": row.get("source_path", ""),
+                "residue_count": row.get("residue_count", ""),
+                "global_intrinsic_solubility_score": row.get("global_intrinsic_solubility_score", ""),
+                "global_structural_solubility_score": row.get("global_structural_solubility_score", ""),
+                "v2_intrinsic_solubility_score": row.get("v2_intrinsic_solubility_score", ""),
+                "v2_structural_solubility_score": row.get("v2_structural_solubility_score", ""),
+            }
 
-    aggrescan_rows = read_tsv(aggrescan_path)
-    preferred = [row for row in aggrescan_rows if row.get("chain") == "All"]
-    if not preferred:
-        preferred = aggrescan_rows
-    for row in preferred:
-        sid = row.get("structure_id", "")
-        merged = rows.setdefault(sid, {"structure_id": sid, "source_path": row.get("source_path", "")})
-        for field in [
-            "positive_aggrescan3d_burden",
-            "positive_aggrescan3d_residues",
-            "positive_patch_count",
-            "max_positive_patch_size",
-            "max_positive_patch_sum",
-            "max_positive_patch_mean",
-            "max_positive_patch_residues",
-            "min_aggrescan3d_score",
-            "max_aggrescan3d_score",
-            "mean_aggrescan3d_score",
-        ]:
-            merged[field] = row.get(field, "")
+    if aggrescan_path is not None:
+        aggrescan_rows = read_tsv(aggrescan_path)
+        preferred = [row for row in aggrescan_rows if row.get("chain") == "All"]
+        if not preferred:
+            preferred = aggrescan_rows
+        for row in preferred:
+            sid = row.get("structure_id", "")
+            merged = rows.setdefault(sid, {"structure_id": sid, "source_path": row.get("source_path", "")})
+            for field in [
+                "positive_aggrescan3d_burden",
+                "positive_aggrescan3d_residues",
+                "positive_patch_count",
+                "max_positive_patch_size",
+                "max_positive_patch_sum",
+                "max_positive_patch_mean",
+                "max_positive_patch_residues",
+                "min_aggrescan3d_score",
+                "max_aggrescan3d_score",
+                "mean_aggrescan3d_score",
+            ]:
+                merged[field] = row.get(field, "")
     return [rows[sid] for sid in sorted(rows)]
 
 
 def validate_inputs(args: argparse.Namespace) -> None:
     missing = []
-    if not args.camsol_out_dir.joinpath("per_residue_scores.tsv").exists():
+    if not args.skip_camsol and not args.camsol_out_dir.joinpath("per_residue_scores.tsv").exists():
         missing.append(args.camsol_out_dir / "per_residue_scores.tsv")
-    if not args.aggrescan3d_out_dir.joinpath("per_residue_scores.tsv").exists():
+    if not args.skip_camsol and not args.camsol_out_dir.joinpath("global_scores.tsv").exists():
+        missing.append(args.camsol_out_dir / "global_scores.tsv")
+    if not args.skip_aggrescan3d and not args.aggrescan3d_out_dir.joinpath("per_residue_scores.tsv").exists():
         missing.append(args.aggrescan3d_out_dir / "per_residue_scores.tsv")
+    if not args.skip_aggrescan3d and not args.aggrescan3d_out_dir.joinpath("global_scores.tsv").exists():
+        missing.append(args.aggrescan3d_out_dir / "global_scores.tsv")
     if missing:
         raise SystemExit("missing scorer output(s):\n" + "\n".join(str(path) for path in missing))
 
@@ -273,10 +281,9 @@ def main() -> None:
     maybe_run_scorers(args)
     validate_inputs(args)
 
-    per_residue_rows = merge_per_residue(
-        args.camsol_out_dir / "per_residue_scores.tsv",
-        args.aggrescan3d_out_dir / "per_residue_scores.tsv",
-    )
+    camsol_per_residue = None if args.skip_camsol else args.camsol_out_dir / "per_residue_scores.tsv"
+    aggrescan_per_residue = None if args.skip_aggrescan3d else args.aggrescan3d_out_dir / "per_residue_scores.tsv"
+    per_residue_rows = merge_per_residue(camsol_per_residue, aggrescan_per_residue)
     per_residue_fields = [
         "structure_id",
         "source_path",
@@ -292,10 +299,9 @@ def main() -> None:
     ]
     write_tsv(args.out_dir / "per_residue_scores.tsv", per_residue_rows, per_residue_fields)
 
-    global_rows = merge_global(
-        args.camsol_out_dir / "global_scores.tsv",
-        args.aggrescan3d_out_dir / "global_scores.tsv",
-    )
+    camsol_global = None if args.skip_camsol else args.camsol_out_dir / "global_scores.tsv"
+    aggrescan_global = None if args.skip_aggrescan3d else args.aggrescan3d_out_dir / "global_scores.tsv"
+    global_rows = merge_global(camsol_global, aggrescan_global)
     global_fields = [
         "structure_id",
         "source_path",

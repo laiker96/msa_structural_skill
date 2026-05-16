@@ -1,81 +1,86 @@
 # structural_evo_analysis
 
-General MSA, tree, conservation, and structure-scoring pipeline for a single
-query protein.
+Maintained pipeline for applying MSA, phylogeny, clade annotation,
+conservation, AFDB download, and optional structure scoring to one query
+protein.
 
-This is a generalized branch of the ANKros `scripts/msa_OGT/` workflow. It
-keeps the original ANKros pipeline unchanged and writes default outputs under:
+Default outputs:
 
 ```text
 results/structural_evo_analysis/
 structures/structural_evo_analysis/
 ```
 
+Override with `SEA_OUT_DIR` and `SEA_STRUCTURE_DIR`.
+
 ## Inputs
 
-- A single-query protein FASTA.
-- A local searchable sequence database FASTA, defaulting to
-  `${UNIREF_DIR}/${SEA_DB}/${SEA_DB}.fasta.gz` with `SEA_DB=uniref90`.
-- Optional user metadata TSV for tree clade annotation. The metadata must have
-  an ID column matching tree tip IDs, usually `id`, and a trait column such as
-  `temperature` or another continuous/categorical value.
-- Optional query PDB for structure scoring. AFDB structures are downloaded for
-  homolog accessions resolved from `repset_metadata.tsv`.
+- Single-sequence protein FASTA. The bundled test query is
+  `sequences/photoHymenobact.fa`.
+- Local protein database FASTA, usually UniRef. Configure with
+  `SEA_DB_FASTA`/`SEA_DB_MMSEQS`, or with `UNIREF_DIR` and `SEA_DB`.
+- Optional metadata for tree annotation. Step 01 automatically adds
+  taxonomy-derived OGT metadata from `data/growth_temp_dataset_OGTFinder.tsv`
+  when hit headers contain `TaxID=`.
+- Optional query PDB at `structures/structural_evo_analysis/query.pdb`.
 
-## Recommended Long Run
+## Full Example
 
-Full searches, IQ-TREE, downloads, and structure scoring can run for a long
-time. Run the full pipeline inside `tmux` and log it:
+Run long jobs in `tmux`:
 
 ```bash
-tmux new -s structural-evo
 mkdir -p logs
-SEA_OUT_DIR=results/structural_evo_analysis \
-  bash scripts/structural_evo_analysis/run_pipeline.sh sequences/query.fa \
-  2>&1 | tee logs/structural_evo_analysis.log
+tmux new -s structural-evo \
+  'SEA_OUT_DIR=results/photoHymenobact_example SEA_LOW_THRESHOLD=20 SEA_HIGH_THRESHOLD=45 bash scripts/structural_evo_analysis/run_pipeline.sh sequences/photoHymenobact.fa results/photoHymenobact_example/repset_metadata.tsv ogt 2>&1 | tee logs/photoHymenobact_example.log'
 ```
 
-Detach with `Ctrl-b d`. Monitor with:
-
-```bash
-tmux attach -t structural-evo
-```
+`SEA_LOW_THRESHOLD` and `SEA_HIGH_THRESHOLD` are passed to the clade annotator.
+For OGT, the example uses `ogt <= 20` as low, `ogt >= 45` as high, and the
+middle range as mid.
 
 ## Stepwise Use
 
 ```bash
-./envs/ankros/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py \
-  --query sequences/query.fa \
-  --out-dir results/structural_evo_analysis
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py \
+  --query sequences/photoHymenobact.fa \
+  --out-dir results/photoHymenobact_example
 
-./envs/ankros/bin/python scripts/structural_evo_analysis/02_align_mafft.py \
-  --out-dir results/structural_evo_analysis
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/02_align_mafft.py \
+  --out-dir results/photoHymenobact_example
 
-./envs/ankros/bin/python scripts/structural_evo_analysis/03_build_tree_iqtree.py \
-  --out-dir results/structural_evo_analysis/tree
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/03_build_tree_iqtree.py \
+  --out-dir results/photoHymenobact_example/tree
 
-./envs/ankros/bin/python scripts/structural_evo_analysis/04_annotate_clades.py \
-  --tree results/structural_evo_analysis/tree/query_msa.treefile \
-  --metadata metadata.tsv \
-  --trait-column temperature \
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/04_annotate_clades.py \
+  --tree results/photoHymenobact_example/tree/query_msa.treefile \
+  --metadata results/photoHymenobact_example/repset_metadata.tsv \
+  --trait-column ogt \
   --low-threshold 20 \
   --high-threshold 45
 
-./envs/ankros/bin/python scripts/structural_evo_analysis/05_conserved_positions.py \
-  --alignment results/structural_evo_analysis/repset_aligned.fa
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/05_conserved_positions.py \
+  --alignment results/photoHymenobact_example/repset_aligned.fa \
+  --out-dir results/photoHymenobact_example/conservation
 
-./envs/ankros/bin/python scripts/structural_evo_analysis/06_download_afdb.py \
-  --metadata results/structural_evo_analysis/repset_metadata.tsv
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/06_download_afdb.py \
+  --metadata results/photoHymenobact_example/repset_metadata.tsv \
+  --dest structures/structural_evo_analysis/afdb \
+  --manifest results/photoHymenobact_example/afdb_downloads/download_manifest.tsv
 
-./envs/ankros/bin/python scripts/structural_evo_analysis/07_score_structures.py \
-  --query-pdb structures/structural_evo_analysis/query.pdb
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/07_score_structures.py \
+  --afdb-dir structures/structural_evo_analysis/afdb \
+  --out-dir results/photoHymenobact_example/structure_scores
 ```
+
+Use `--skip-aggrescan3d` on step 07 when the optional Aggrescan3D environment
+has not been installed.
 
 ## Outputs
 
 - `mmseqs_search_results.tsv`: raw MMseqs hit table.
-- `hits_metadata.tsv`: searchable hit metadata and filtering status.
+- `hits_metadata.tsv`: hit metadata, filters, taxonomy, and OGT join status.
 - `repset.fa`: query plus retained homologs.
+- `repset_metadata.tsv`: metadata keyed by tree-tip IDs.
 - `repset_aligned.fa`: MAFFT MSA.
 - `query_column_map.tsv`: alignment columns mapped to query positions.
 - `tree/query_msa.treefile`: IQ-TREE output tree.
@@ -86,11 +91,24 @@ tmux attach -t structural-evo
 - `afdb_downloads/download_manifest.tsv`: AFDB per-accession status.
 - `structure_scores/`: merged CamSol-style and Aggrescan3D score tables.
 
-## Notes
+## Parameters To Treat Carefully
 
-- This pipeline does not use ANKros domain boundaries, class-I photolyase
-  filtering, or OGTFinder unless the user provides equivalent metadata.
-- Continuous metadata can be summarized without thresholds, or converted into
-  low/mid/high categories with `--low-threshold` and `--high-threshold`.
-- The CamSol implementation reused here is the repository's local
-  CamSol-style scorer, not a claim of identity with the closed CamSol server.
+- MMseqs defaults: `SEA_MMSEQS_S`, `SEA_MMSEQS_E`, `SEA_MIN_SEQ_ID`,
+  `SEA_COVERAGE`, `SEA_MAX_SEQS`.
+- Post-search filters: `SEA_MIN_LENGTH`, `SEA_MAX_LENGTH`,
+  `SEA_POST_MIN_QCOV`, `SEA_POST_MIN_IDENTITY`, `SEA_POST_MAX_IDENTITY`.
+- Tree thresholds: `--min-column-occupancy`, `--model`, `--bootstrap`,
+  `--seed`.
+- Clade thresholds: `--low-threshold`, `--high-threshold`,
+  `--min-labelled`, `--min-fraction`.
+
+Do not change these silently. Record overrides in logs or run manifests.
+
+## Limitations
+
+- The OGT join depends on usable taxonomy in hit headers. For non-UniRef
+  databases, provide a metadata TSV keyed by sequence ID or ensure headers
+  include `TaxID=`.
+- The CamSol implementation reused by step 07 is a transparent local
+  approximation, not the closed CamSol server.
+- Aggrescan3D scoring requires `bash setup_envs.sh --with-aggrescan3d`.

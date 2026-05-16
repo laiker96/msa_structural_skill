@@ -1,61 +1,39 @@
-# `scripts/`
+# scripts/
 
-Two coordinated pipelines plus shared utilities. Every script here is
-part of a concrete pipeline; experimental / ad-hoc scripts live in
-`scripts/experiments/` until they mature into pipeline steps.
+The maintained workflow for this repository is:
 
+```text
+scripts/structural_evo_analysis/
 ```
+
+It provides a reusable single-query protein pipeline:
+
+```text
+query FASTA
+  -> MMseqs2 homolog search
+  -> MAFFT MSA
+  -> IQ-TREE phylogeny
+  -> metadata-driven clade annotation
+  -> conserved-position tables
+  -> optional AFDB download and structure scoring
+```
+
+Use `./envs/structural_evo/bin/python` for these scripts.
+
+## Directory Map
+
+```text
 scripts/
-├── msa_OGT/             01–17  UniRef taxid → OGTFinder → profile-HMM MSA
-├── structural/          FAD/FMN holo-model entrypoint and structural helpers
-├── solubility/                 Legacy CamSol-style ANKros/AFDB scoring
-├── aggregability/              Legacy Aggrescan3D ANKros/AFDB scoring
-└── experiments/                MD and ad-hoc analyses
+├── structural_evo_analysis/   maintained generalized pipeline
+└── msa_OGT/                   legacy ANKros-specific reference code
 ```
 
-## Existing dependency chain
+`scripts/msa_OGT/15_compute_solubility_aggregability.py` and its scorer modules
+are still reused by `structural_evo_analysis/07_score_structures.py`. Other
+`msa_OGT` steps are retained as reference material and should not drive new
+skill behavior unless they are deliberately generalized.
 
-```
-   ┌─────────── scripts/msa_OGT/ ──────────┐
-   │                                      │
-   │  UniRef90 → MMseqs2 search →         │
-   │  class I filter → master set →      │
-   │  HMM align → QC → linker refine →   │
-   │  IQ-TREE → regime clades/logos      │
-   │                                      │
-   │  Output: results/msa_OGT/*           │
-   └───────────────────┬──────────────────┘
-                       │ classI_confirmed.fa + tree
-                       ▼
-   ┌─────── scripts/structural/ ──────────┐
-   │                                      │
-   │  Build the DiffDock-free FAD/FMN     │
-   │  holo model from 1TEZ and 2J09       │
-   │  donors; write measured FAD/FMN,     │
-   │  CPD, and DNA residue annotations.   │
-   │                                      │
-   │  Output: results/structural/         │
-   └──────────────────────────────────────┘
-```
+## Long Runs
 
-Each pipeline subdirectory has its own `README.md` with step-by-step details.
-`msa_OGT/14_validate_structural_matches.py` screens AFDB models against the
-ANKros fold with Foldseek before structure scoring. `msa_OGT/15_compute_solubility_aggregability.py` runs the pipeline-owned
-CamSol and Aggrescan3D scorer utilities and merges their structure scores for
-the MSA pipeline. The step 16 HTML reads that merged table when present, and
-adds ANKros plus representative-structure score heatmaps for each displayed
-clade.
-
-## Common requirements
-
-All scripts assume the `ankros` conda env is active:
-
-```bash
-conda activate ./envs/ankros
-```
-
-Aggrescan3D and Amber CUDA are optional separate envs — see `setup_envs.sh`.
-The structural holo builder stages its required crystals under
-`results/structural/inputs/`. AFDB homolog models for MSA representatives are
-fetched with `msa_OGT/13_download_afdb.py`.
-Organism OGT data is under `data/` (BacDive cache, TEMPURA CSV).
+MMseqs searches, IQ-TREE, AFDB downloads, and structure scoring can be
+long-running. Use `tmux` and log commands under `logs/`.

@@ -10,8 +10,11 @@ fi
 QUERY_FASTA="$1"
 METADATA_TSV="${2:-}"
 TRAIT_COLUMN="${3:-}"
-PYTHON="${PYTHON:-./envs/ankros/bin/python}"
+PYTHON="${PYTHON:-./envs/structural_evo/bin/python}"
 OUT_DIR="${SEA_OUT_DIR:-results/structural_evo_analysis}"
+TRAIT_TYPE="${SEA_TRAIT_TYPE:-continuous}"
+LOW_THRESHOLD="${SEA_LOW_THRESHOLD:-}"
+HIGH_THRESHOLD="${SEA_HIGH_THRESHOLD:-}"
 
 "${PYTHON}" scripts/structural_evo_analysis/01_mmseqs_search.py \
   --query "${QUERY_FASTA}" \
@@ -24,11 +27,18 @@ OUT_DIR="${SEA_OUT_DIR:-results/structural_evo_analysis}"
   --out-dir "${OUT_DIR}/tree"
 
 if [[ -n "${METADATA_TSV}" && -n "${TRAIT_COLUMN}" ]]; then
-  "${PYTHON}" scripts/structural_evo_analysis/04_annotate_clades.py \
-    --tree "${OUT_DIR}/tree/query_msa.treefile" \
-    --metadata "${METADATA_TSV}" \
-    --trait-column "${TRAIT_COLUMN}" \
+  annotate_args=(
+    --tree "${OUT_DIR}/tree/query_msa.treefile"
+    --metadata "${METADATA_TSV}"
+    --trait-column "${TRAIT_COLUMN}"
+    --trait-type "${TRAIT_TYPE}"
     --out-dir "${OUT_DIR}/metadata_clades"
+  )
+  if [[ -n "${LOW_THRESHOLD}" && -n "${HIGH_THRESHOLD}" ]]; then
+    annotate_args+=(--low-threshold "${LOW_THRESHOLD}" --high-threshold "${HIGH_THRESHOLD}")
+  fi
+  "${PYTHON}" scripts/structural_evo_analysis/04_annotate_clades.py \
+    "${annotate_args[@]}"
 fi
 
 "${PYTHON}" scripts/structural_evo_analysis/05_conserved_positions.py \

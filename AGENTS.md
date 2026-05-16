@@ -1,92 +1,112 @@
-# ANKROS Enzyme Project Guide
+# Structural Evolution Skill Guide
 
 ## Scope
 
-This repository centers on ANKros-CPD, a class I CPD photolyase from
-*Hymenobacter* sp. UV11. Align changes with the existing pipeline layout.
+This repository is a reusable skill/pipeline scaffold for single-protein
+structural evolutionary analysis. The main maintained workflow is:
 
-## Biology Reference
+```text
+scripts/structural_evo_analysis/
+```
 
-- `ANKros` = *Photohymenobacter* photolyase.
-- Protein: ANKros-CPD / ANW48624.1.
-- Domains:
-  - `1-130`: antenna domain.
-  - `131-205`: interdomain linker.
-  - `206-437`: catalytic/helical domain.
-- Cofactors: FAD and FMN.
+Use it to search homologs, build an MSA/tree, annotate clades from metadata,
+compute conserved positions, download AlphaFold DB structures, and optionally
+score structures for solubility/aggregability.
 
-## Info Directory
+The ANKros/photolyase sequence in `sequences/photoHymenobact.fa` is the bundled
+test query. Do not hard-code ANKros-specific residue ranges, domain boundaries,
+thresholds, or biological interpretations into the generalized pipeline.
 
-Use `info/INDEX.md` before opening PDFs or raw Design-Expert files for extra
-biological context.
+## Operating Priorities
 
-## Environments
+1. Correctness
+2. Reproducibility
+3. Safe handling of long-running tasks
+4. Clarity
+5. Minimal changes
+6. Honest uncertainty
 
-`setup_envs.sh` defines how environments are created. This file only documents
-how to use them.
+## Main Inputs
 
-### Main environment
+- Query FASTA: `sequences/photoHymenobact.fa` for the example, or a user
+  supplied single-protein FASTA.
+- Search database: a local protein FASTA such as UniRef, configured with
+  `SEA_DB_FASTA`/`SEA_DB_MMSEQS` or `UNIREF_DIR`/`SEA_DB`.
+- Metadata: `data/growth_temp_dataset_OGTFinder.tsv` is the default
+  taxonomy-keyed growth-temperature source. Step 01 propagates `TaxID=` from
+  UniRef-style headers and joins this table into `repset_metadata.tsv`.
+- Structures: AlphaFold DB PDB files downloaded by step 06 under
+  `structures/structural_evo_analysis/afdb/`; an optional query PDB can be
+  placed at `structures/structural_evo_analysis/query.pdb`.
 
-Use `./envs/ankros/bin/python` for MSA, structural work, and most experimental
-scripts.
+## Environment
+
+`setup_envs.sh` is the source of truth for environment creation.
 
 ```bash
-./envs/ankros/bin/python scripts/msa_OGT/01_mmseqs_search.py
-./envs/ankros/bin/python scripts/structural/orchestrate_holo_model.py
+bash setup_envs.sh
 ```
 
-### Specialized environments
+This creates the main environment at:
 
-- Amber CUDA: `./envs/amber_cuda/bin/pmemd.cuda`
-- Aggrescan3D: `./envs/aggrescan3d/bin/aggrescan`
-- ThermoMPNN: `./envs/thermompnn/bin/python`
+```text
+envs/structural_evo/
+```
 
-Examples:
+Use its Python explicitly:
 
 ```bash
-PMEMD=./envs/amber_cuda/bin/pmemd.cuda bash scripts/experiments/fad_fmn_md_modeling/04_run_amber_cuda_juanma_ramp.sh
-./envs/aggrescan3d/bin/aggrescan --help
-./envs/thermompnn/bin/python -c "import torch, pandas, omegaconf, Bio"
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py --help
 ```
 
-ThermoMPNN is cloned/configured under `external/ThermoMPNN/`.
+Aggrescan3D is optional and separate:
 
-`setup_envs.sh` is idempotent and logs to `logs/setup_envs.log`.
-
-## Experimental Pipelines
-
-Experimental work belongs under:
-
-```text
-scripts/experiments/<topic>/
+```bash
+bash setup_envs.sh --with-aggrescan3d
 ```
 
-Outputs belong under:
+Do not add Amber, MD, PyRosetta, ThermoMPNN, OpenMM, CUDA, notebooks, or other
+large stacks unless a maintained structural-evolution step actually requires
+them.
 
-```text
-results/experiments/<topic>/
+## Long-Running Tasks
+
+Run full searches, IQ-TREE jobs, AFDB downloads, and structure scoring in
+`tmux`, with logs:
+
+```bash
+mkdir -p logs
+tmux new -s structural-evo \
+  'SEA_OUT_DIR=results/photoHymenobact_example SEA_LOW_THRESHOLD=20 SEA_HIGH_THRESHOLD=45 bash scripts/structural_evo_analysis/run_pipeline.sh sequences/photoHymenobact.fa results/photoHymenobact_example/repset_metadata.tsv ogt 2>&1 | tee logs/photoHymenobact_example.log'
 ```
 
-Recommended layout:
+Record the command, working directory, inputs, outputs/logs, relevant
+environment variables, and how to monitor or stop the task.
 
-```text
-scripts/experiments/<topic>/run_pipeline.sh
-scripts/experiments/<topic>/README.md
-results/experiments/<topic>/{figures,tables,logs,intermediates}/
+## Pipeline Rules
+
+- Preserve the numbered pipeline order unless a change is explicitly requested.
+- Do not silently change defaults, search thresholds, clade thresholds, filters,
+  or scoring parameters.
+- Keep new outputs under `results/structural_evo_analysis/` or a
+  user-selected `SEA_OUT_DIR`.
+- Keep downloaded/generated structures under
+  `structures/structural_evo_analysis/` or a user-selected
+  `SEA_STRUCTURE_DIR`.
+- Treat `scripts/msa_OGT/` as legacy/reference code except for the scorer
+  modules currently reused by step 07.
+- Update documentation when behavior, inputs, outputs, parameters,
+  dependencies, or assumptions change.
+
+## Validation
+
+After edits, run the smallest relevant checks available:
+
+```bash
+./envs/structural_evo/bin/python -m py_compile scripts/structural_evo_analysis/*.py
+bash setup_envs.sh --help
 ```
 
-Use existing shared outputs instead of duplicating them:
-
-- MSA outputs: `results/msa_OGT/`
-- Structural outputs: `results/structural/`
-
-Use `./envs/ankros/bin/python` for new experimental pipelines unless a
-specialized environment is explicitly required.
-
-## Project-Specific Cautions
-
-- Preserve residue numbering.
-- Preserve existing pipeline numbering and order.
-- Do not silently change biological thresholds, cutoffs, or residue mappings.
-- When adding an environment, place its config under `config/`, wire it into
-  `setup_envs.sh`, and document the exact invocation command.
+For full-pipeline validation, use the bundled query sequence and a local
+UniRef-compatible database. Do not claim the pipeline completed unless the logs
+and expected output files were inspected.
