@@ -67,6 +67,8 @@ OGT, the example thresholds use `ogt <= 20` as low and `ogt >= 45` as high.
 Step 01 selects a diverse identity-stratified MSA subset by default
 (`SEA_MAX_REPSET_SEQS=500`, including query). Agents may adjust MMseqs/search
 or subset parameters when needed, but must record exact values and rationale.
+Step 03 uses IQ-TREE fast mode by default; pass `--no-fast` for the slower
+full model/bootstrap mode.
 
 Prepare or validate the UniRef database explicitly before step 01:
 
@@ -166,6 +168,8 @@ raw OGTFinder table with:
 - `metadata_clades/called_clades.tsv`: clades passing category enrichment
   thresholds.
 - `conservation/conserved_positions.tsv`: conserved query/alignment columns.
+- `conservation/conservation_plot.png`: MSA conservation and occupancy profile
+  across query positions.
 - `afdb_downloads/download_manifest.tsv`: AFDB per-accession status.
 - `structure_scores/`: merged CamSol-style and Aggrescan3D score tables.
 - `vulnerability/top_vulnerable_positions.tsv`: highest-priority query
@@ -181,8 +185,8 @@ raw OGTFinder table with:
   `SEA_COVERAGE`, `SEA_MAX_SEQS`.
 - Post-search filters: `SEA_MIN_LENGTH`, `SEA_MAX_LENGTH`,
   `SEA_POST_MIN_QCOV`, `SEA_POST_MIN_IDENTITY`, `SEA_POST_MAX_IDENTITY`.
-- Tree thresholds: `--min-column-occupancy`, `--model`, `--bootstrap`,
-  `--seed`.
+- Tree settings: `--fast/--no-fast`, `--min-column-occupancy`, `--model`,
+  `--bootstrap`, `--seed`.
 - Clade thresholds: `--low-threshold`, `--high-threshold`,
   `--min-labelled`, `--min-fraction`.
 

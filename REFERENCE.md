@@ -8,9 +8,9 @@ The maintained scripts live under `scripts/structural_evo_analysis/`.
 | --- | --- | --- | --- |
 | 01 | `01_mmseqs_search.py` | MMseqs search, post-search filters, diversity-first representative set, optional OGT join | `mmseqs_search_results.tsv`, `hits_metadata.tsv`, `repset.fa`, `repset_metadata.tsv` |
 | 02 | `02_align_mafft.py` | Align query plus representatives | `repset_aligned.fa`, `query_column_map.tsv`, `alignment_summary.tsv` |
-| 03 | `03_build_tree_iqtree.py` | Build IQ-TREE tree from the MSA | `tree/query_msa.treefile`, `tree/run_manifest.txt` |
+| 03 | `03_build_tree_iqtree.py` | Build IQ-TREE tree from the MSA, fast mode by default | `tree/query_msa.treefile`, `tree/run_manifest.txt` |
 | 04 | `04_annotate_clades.py` | Annotate trait-enriched clades such as OGT regimes | `metadata_clades/` |
-| 05 | `05_conserved_positions.py` | Score conserved query positions from an MSA | `conservation/position_conservation.tsv`, `conservation/conserved_positions.tsv` |
+| 05 | `05_conserved_positions.py` | Score conserved query positions from an MSA and plot the MSA conservation profile | `conservation/position_conservation.tsv`, `conservation/conserved_positions.tsv`, `conservation/conservation_plot.png` |
 | 06 | `06_download_afdb.py` | Download/cache AFDB PDBs for representative accessions | `afdb_downloads/download_manifest.tsv`, `structures/afdb/` |
 | 07 | `07_score_structures.py` | Score query and AFDB structures with CamSol-style and optional Aggrescan3D scores | `structure_scores/` |
 | 08 | `08_vulnerability_analysis.py` | Rank query residues from conservation and per-residue structure scores | `vulnerability/top_vulnerable_positions.tsv` |

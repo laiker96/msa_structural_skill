@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import math
+import os
 import sys
 from collections import Counter
 from pathlib import Path
@@ -20,6 +21,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--min-occupancy", type=float, default=0.70)
     parser.add_argument("--min-top-frequency", type=float, default=0.80)
     parser.add_argument("--include-query-gap-columns", action="store_true")
+    parser.add_argument("--no-plot", action="store_true", help="Do not write conservation_plot.png.")
     return parser.parse_args()
 
 
@@ -53,6 +55,46 @@ def column_stats(entries: list[tuple[str, str, str]], col: int, query_pos: str, 
         "entropy_bits": f"{entropy:.4f}",
         "conservation": f"{conservation:.4f}",
     }
+
+
+def write_conservation_plot(rows: list[dict[str, object]], out_path: Path) -> None:
+    if not rows:
+        return
+    os.environ.setdefault("MPLCONFIGDIR", str(out_path.parent / ".matplotlib"))
+    try:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except ImportError as exc:
+        print(f"WARNING: matplotlib not available; skipping conservation plot: {exc}", file=sys.stderr)
+        return
+
+    query_rows = [row for row in rows if str(row.get("query_pos", "")).isdigit()]
+    plot_rows = query_rows if query_rows else rows
+    x_key = "query_pos" if query_rows else "alignment_col"
+    x_label = "Query position" if query_rows else "Alignment column"
+    x_values = [int(row[x_key]) for row in plot_rows]
+    conservation = [float(row["conservation"]) for row in plot_rows]
+    occupancy = [float(row["occupancy"]) for row in plot_rows]
+    conserved_x = [int(row[x_key]) for row in plot_rows if row.get("is_conserved") == "yes"]
+    conserved_y = [float(row["conservation"]) for row in plot_rows if row.get("is_conserved") == "yes"]
+
+    width = max(10.0, min(24.0, len(plot_rows) / 35.0))
+    fig, ax = plt.subplots(figsize=(width, 4.8))
+    ax.plot(x_values, conservation, color="#2f6f9f", linewidth=1.2, label="Conservation")
+    ax.plot(x_values, occupancy, color="#8a8f3a", linewidth=0.9, alpha=0.75, label="Occupancy")
+    if conserved_x:
+        ax.scatter(conserved_x, conserved_y, s=10, color="#b23a48", label="Conserved calls", zorder=3)
+    ax.set_xlabel(x_label)
+    ax.set_ylabel("Score")
+    ax.set_ylim(-0.02, 1.02)
+    ax.set_title("MSA conservation")
+    ax.grid(True, axis="y", alpha=0.25)
+    ax.legend(loc="upper right", frameon=False)
+    fig.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=180)
+    plt.close(fig)
 
 
 def main() -> None:
@@ -96,6 +138,11 @@ def main() -> None:
     ]
     cfg.write_tsv(args.out_dir / "position_conservation.tsv", rows, fields)
     cfg.write_tsv(args.out_dir / "conserved_positions.tsv", conserved, fields)
+    if not args.no_plot:
+        plot_path = args.out_dir / "conservation_plot.png"
+        write_conservation_plot(rows, plot_path)
+        if plot_path.exists():
+            print(f"Saved: {plot_path}")
     print(f"Saved: {args.out_dir / 'position_conservation.tsv'} ({len(rows)} columns)")
     print(f"Saved: {args.out_dir / 'conserved_positions.tsv'} ({len(conserved)} conserved)")
 

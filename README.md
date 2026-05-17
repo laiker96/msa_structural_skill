@@ -230,6 +230,7 @@ results/<run>/tree/query_msa.treefile
 results/<run>/metadata_clades/clade_annotations.tsv
 results/<run>/metadata_clades/called_clades.tsv
 results/<run>/conservation/conserved_positions.tsv
+results/<run>/conservation/conservation_plot.png
 results/<run>/afdb_downloads/download_manifest.tsv
 results/<run>/structure_scores/
 results/<run>/vulnerability/top_vulnerable_positions.tsv

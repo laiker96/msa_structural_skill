@@ -32,7 +32,8 @@ pipeline is one recipe, not the only way to use this skill.
   `SEA_PIPELINE_MODE=msa`. No query PDB is required.
 - Conservation only: run step 05 from an existing alignment, or use
   `SEA_PIPELINE_MODE=conservation` to run search, alignment, optional clade
-  annotation, and conservation. No query PDB is required.
+  annotation, and conservation. No query PDB is required. Step 05 writes
+  `conservation/conservation_plot.png` when matplotlib is available.
 - OGT context: use `SEA_OGT_AWARE=1` or step 01 `--join-ogt`, then run tree and
   clade annotation. Non-OGT runs must not join OGT during search.
 - Structure scoring only: run step 07 with query/AFDB PDBs. Use
@@ -67,6 +68,8 @@ pipeline is one recipe, not the only way to use this skill.
 
 - Do not silently change search thresholds, tree settings, clade thresholds,
   filters, scoring parameters, or representative-set size.
+- Step 03 uses IQ-TREE fast mode by default. Use `--no-fast` only when the user
+  explicitly wants the slower full model/bootstrap tree.
 - Step 01 uses a diverse identity-stratified subset by default; set
   `SEA_MAX_REPSET_SEQS=0` only when the user explicitly wants all filtered hits.
 - Non-OGT runs should not join OGT metadata during search. Enable OGT mode with

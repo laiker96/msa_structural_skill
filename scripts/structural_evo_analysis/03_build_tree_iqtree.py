@@ -23,7 +23,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--keep-query-gap-columns", action="store_true")
     parser.add_argument("--prepare-only", action="store_true")
     parser.add_argument("--force", action="store_true")
-    parser.add_argument("--fast", action="store_true", help="Use IQ-TREE -fast with LG.")
+    parser.add_argument(
+        "--fast",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use IQ-TREE -fast with --fast-model. Use --no-fast for full model/bootstrap mode.",
+    )
     parser.add_argument("--model", default="LG+F+R4")
     parser.add_argument("--fast-model", default="LG")
     parser.add_argument("--bootstrap", type=int, default=1000)
