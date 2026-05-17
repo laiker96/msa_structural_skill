@@ -8,6 +8,4 @@ dependencies:
   - mmseqs2=18.8cc5c
   - mafft=7.526
   - iqtree=3.1.1
-  - numpy=2.2
   - matplotlib=3.10
-  - pip

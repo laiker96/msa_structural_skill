@@ -11,8 +11,7 @@
 # mmseqs2=18.8cc5c
 # mafft=7.526
 # iqtree=3.1.1
-# numpy=2.2
-# pip
+# matplotlib=3.10
 
 # Optional structure-scoring environment:
 # aggrescan3d=1.1.1
