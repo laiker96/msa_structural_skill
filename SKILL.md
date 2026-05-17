@@ -22,8 +22,9 @@ pipeline is one recipe, not the only way to use this skill.
 - Keep committed smoke-test inputs under `test/`. Keep generated structures in
   the runtime `SEA_STRUCTURE_DIR`.
 - Use `data/ogt_taxid_summary.tsv` only when OGT-aware mode is requested.
-- Use `<skill-root>/envs/structural_evo/bin/python` after running
-  `<skill-root>/setup_envs.sh`.
+- Install the environment from the skill root when missing:
+  `bash setup_envs.sh`. Use `<skill-root>/envs/structural_evo/bin/python`
+  after setup.
 
 ## Choose The Smallest Recipe
 
@@ -54,7 +55,10 @@ pipeline is one recipe, not the only way to use this skill.
    (`50`, `90`, `100`, `uniref50`, `uniref90`, `uniref100`). If absent, ask
    before downloading UniRef with `prepare_uniref_database.py --download`.
 4. Check whether `<skill-root>/envs/structural_evo/bin/python` exists. If not,
-   run setup in `tmux` from the skill root and log it.
+   run `bash setup_envs.sh` in `tmux` from the skill root and log it. For
+   structure scoring with Aggrescan3D, install the optional environment with
+   `bash setup_envs.sh --skip-main --with-aggrescan3d` when
+   `<skill-root>/envs/aggrescan3d/bin/aggrescan` is missing.
 5. Run long searches, IQ-TREE jobs, AFDB downloads, and structure scoring in
    `tmux` with a log.
 6. Report exact commands, key outputs, and any steps not run.

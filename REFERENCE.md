@@ -85,6 +85,28 @@ For manual use, pass `--join-ogt` to step 01 before running clade annotation.
   `500`; use `0` only when all filtered hits are required.
 - `SEA_THREADS`: thread count for scripts that support it.
 
+## Environment Setup
+
+From the skill root, install the main environment with:
+
+```bash
+bash setup_envs.sh
+```
+
+Use its Python explicitly:
+
+```bash
+./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py --help
+```
+
+Optional Aggrescan3D support is separate:
+
+```bash
+bash setup_envs.sh --skip-main --with-aggrescan3d
+```
+
+Run setup commands in `tmux` with logs when conda solves may be slow.
+
 ## Long-Running Runs
 
 Run full searches, tree inference, AFDB downloads, and structure scoring in
