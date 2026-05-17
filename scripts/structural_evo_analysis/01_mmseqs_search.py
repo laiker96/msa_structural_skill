@@ -25,14 +25,28 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--query", type=Path, required=True, help="Single-sequence query FASTA.")
     parser.add_argument("--out-dir", type=Path, default=cfg.OUTPUT_DIR)
-    parser.add_argument("--db-name", default=cfg.DEFAULT_DB_NAME)
-    parser.add_argument("--db-fasta", type=Path, default=cfg.DEFAULT_DB_FASTA)
-    parser.add_argument("--db-mmseqs", type=Path, default=cfg.DEFAULT_DB_MMSEQS)
+    parser.add_argument(
+        "--db-name",
+        default=None,
+        help="Database name or UniRef shorthand. Examples: uniref50, uniref90, uniref100, 50, 90, 100.",
+    )
+    parser.add_argument(
+        "--db-fasta",
+        type=Path,
+        default=None,
+        help="Protein FASTA to search. Defaults to $UNIREF_DIR/<db-name>/<db-name>.fasta.gz.",
+    )
+    parser.add_argument(
+        "--db-mmseqs",
+        type=Path,
+        default=None,
+        help="MMseqs database prefix. Defaults beside the selected FASTA as <fasta-stem>_db.",
+    )
     parser.add_argument(
         "--ogt-metadata",
         type=Path,
         default=cfg.DEFAULT_OGT_TSV,
-        help="Optional OGTFinder-style TSV used to add taxid-derived OGT/regime metadata.",
+        help="Optional OGT metadata TSV. Supports data/ogt_taxid_summary.tsv or an external raw OGTFinder table.",
     )
     parser.add_argument("--no-ogt", action="store_true", help="Do not join OGT/regime metadata.")
     parser.add_argument("--sensitivity", type=float, default=float(os.environ.get("SEA_MMSEQS_S", "7.5")))
@@ -45,9 +59,35 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--post-min-qcov", type=float, default=float(os.environ.get("SEA_POST_MIN_QCOV", "0.50")))
     parser.add_argument("--post-min-identity", type=float, default=float(os.environ.get("SEA_POST_MIN_IDENTITY", "5.0")))
     parser.add_argument("--post-max-identity", type=float, default=float(os.environ.get("SEA_POST_MAX_IDENTITY", "99.9")))
+    parser.add_argument(
+        "--max-repset-seqs",
+        type=int,
+        default=int(os.environ.get("SEA_MAX_REPSET_SEQS", "500")),
+        help="Maximum representative-set size including query. Use 0 to keep all filtered hits.",
+    )
+    parser.add_argument(
+        "--identity-bin-width",
+        type=float,
+        default=float(os.environ.get("SEA_IDENTITY_BIN_WIDTH", "5.0")),
+        help="Query-identity bin width for diverse default hit selection.",
+    )
     parser.add_argument("--threads", type=int, default=cfg.N_THREADS)
     parser.add_argument("--force", action="store_true", help="Overwrite existing search TSV and derived FASTAs.")
-    return parser.parse_args()
+    args = parser.parse_args()
+    db_name_from_cli = args.db_name is not None
+    db_fasta_from_cli = args.db_fasta is not None
+    args.db_name = cfg.normalize_db_name(args.db_name or cfg.DEFAULT_DB_NAME)
+    if args.db_fasta is None:
+        if db_name_from_cli:
+            args.db_fasta = cfg.default_db_fasta(args.db_name)
+        else:
+            args.db_fasta = Path(os.environ.get("SEA_DB_FASTA", cfg.default_db_fasta(args.db_name)))
+    if args.db_mmseqs is None:
+        if db_name_from_cli or db_fasta_from_cli:
+            args.db_mmseqs = cfg.default_db_mmseqs(args.db_name, args.db_fasta)
+        else:
+            args.db_mmseqs = Path(os.environ.get("SEA_DB_MMSEQS", cfg.default_db_mmseqs(args.db_name, args.db_fasta)))
+    return args
 
 
 def require_mmseqs() -> str:
@@ -143,6 +183,33 @@ def filter_reasons(row: dict[str, str], seq: str, args: argparse.Namespace) -> l
     return reasons
 
 
+def select_diverse_hits(rows: list[dict[str, object]], args: argparse.Namespace) -> list[dict[str, object]]:
+    max_hits = args.max_repset_seqs - 1 if args.max_repset_seqs > 0 else 0
+    if max_hits <= 0 or len(rows) <= max_hits:
+        return rows
+    width = max(args.identity_bin_width, 0.1)
+    bins: dict[int, list[dict[str, object]]] = {}
+    for row in rows:
+        pident = float(row["pident"])
+        bin_id = int(pident // width)
+        bins.setdefault(bin_id, []).append(row)
+    for bin_rows in bins.values():
+        bin_rows.sort(key=lambda row: (-float(row["bits"]), -float(row["qcov"]), str(row["id"])))
+
+    selected = []
+    ordered_bins = sorted(bins)
+    while len(selected) < max_hits and ordered_bins:
+        next_bins = []
+        for bin_id in ordered_bins:
+            bin_rows = bins[bin_id]
+            if bin_rows and len(selected) < max_hits:
+                selected.append(bin_rows.pop(0))
+            if bin_rows:
+                next_bins.append(bin_id)
+        ordered_bins = next_bins
+    return selected
+
+
 def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> None:
     query_sid, query_header, query_seq = cfg.query_entry(args.query)
     hits = load_best_hits(hits_tsv)
@@ -152,7 +219,7 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
     entries = cfg.read_fasta(all_fa)
     lookup = None if args.no_ogt else cfg.OGTFinderLookup(args.ogt_metadata)
     rows = []
-    filtered = [(query_sid, query_header, query_seq)]
+    passed_entries = []
     for sid, header, seq in entries:
         row = hits.get(sid)
         if row is None:
@@ -181,7 +248,24 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
             meta.update(lookup.lookup(taxid, organism))
         rows.append(meta)
         if not reasons:
-            filtered.append((sid, header, clean))
+            passed_entries.append({
+                **meta,
+                "sid": sid,
+                "fasta_header": header,
+                "sequence": clean,
+            })
+    selected_entries = select_diverse_hits(passed_entries, args)
+    selected_ids = {entry["sid"] for entry in selected_entries}
+    filtered = [(query_sid, query_header, query_seq)] + [
+        (entry["sid"], entry["fasta_header"], entry["sequence"]) for entry in selected_entries
+    ]
+    for row in rows:
+        if row["passes_default_filters"] == "yes":
+            row["selected_for_msa"] = "yes" if row["id"] in selected_ids else "no"
+            row["selection_reason"] = "diverse_identity_subset" if row["id"] in selected_ids else "not_selected_diverse_subset"
+        else:
+            row["selected_for_msa"] = "no"
+            row["selection_reason"] = "filtered"
     query_meta = {
         "id": query_sid,
         "accession": cfg.normalize_accession(query_sid),
@@ -196,17 +280,20 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
         "bits": "",
         "passes_default_filters": "query",
         "filter_reasons": "",
+        "selected_for_msa": "yes",
+        "selection_reason": "query",
     }
     if lookup is not None:
         query_meta.update(lookup.lookup(query_meta["taxid"], query_meta["organism"]))
     fields = [
         "id", "accession", "taxid", "organism", "header", "length", "pident", "qcov", "tcov",
-        "evalue", "bits", "passes_default_filters", "filter_reasons",
+        "evalue", "bits", "passes_default_filters", "filter_reasons", "selected_for_msa", "selection_reason",
     ] + ([] if lookup is None else cfg.OGTFinderLookup.fields)
     cfg.write_tsv(args.out_dir / "hits_metadata.tsv", rows, fields)
     cfg.write_tsv(args.out_dir / "repset_metadata.tsv", [query_meta] + rows, fields)
     cfg.write_fasta(filtered, args.out_dir / "repset.fa")
     print(f"Saved: {args.out_dir / 'hits_metadata.tsv'} ({len(rows)} rows)")
+    print(f"Selected {len(filtered) - 1}/{len(passed_entries)} filtered hits for diverse MSA subset")
     print(f"Saved: {args.out_dir / 'repset.fa'} ({len(filtered)} sequences including query)")
 
 

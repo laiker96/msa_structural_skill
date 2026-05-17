@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import re
 import shutil
 import sys
 import tempfile
@@ -55,10 +56,14 @@ def read_metadata(path: Path, column: str) -> list[str]:
     if not path.exists():
         return []
     with path.open(newline="") as handle:
-        reader = csv.DictReader(handle, delimiter="\t")
-        if column not in (reader.fieldnames or []):
-            raise SystemExit(f"ERROR: {path} has no column {column}; available: {reader.fieldnames}")
-        return [row.get(column, "").strip() for row in reader]
+        rows = [row for row in csv.DictReader(handle, delimiter="\t")]
+        if not rows:
+            return []
+        fieldnames = list(rows[0].keys())
+        if column not in fieldnames:
+            raise SystemExit(f"ERROR: {path} has no column {column}; available: {fieldnames}")
+        selected = [row for row in rows if row.get("selected_for_msa", "yes") == "yes"]
+        return [row.get(column, "").strip() for row in selected]
 
 
 def collect_accessions(args: argparse.Namespace) -> list[str]:
@@ -68,7 +73,12 @@ def collect_accessions(args: argparse.Namespace) -> list[str]:
     if args.list:
         values.extend(read_list(args.list))
     values.extend(read_metadata(args.metadata, args.column))
-    return cfg.unique_preserve_order([cfg.normalize_accession(value) for value in values])
+    return cfg.unique_preserve_order([
+        accession
+        for value in values
+        if (accession := cfg.normalize_accession(value))
+        and re.fullmatch(r"(?:[A-Z][0-9][A-Z0-9]{3}[0-9]|[A-Z0-9]{10})", accession)
+    ])
 
 
 def fetch_one(acc: str, args: argparse.Namespace) -> dict[str, str]:

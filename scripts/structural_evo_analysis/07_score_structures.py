@@ -19,7 +19,7 @@ def parse_args() -> argparse.Namespace:
         "--query-pdb",
         type=Path,
         default=cfg.STRUCTURE_DIR / "query.pdb",
-        help="Optional local query PDB. If absent, only AFDB structures are scored.",
+        help="Required local query PDB for vulnerability analysis.",
     )
     parser.add_argument("--out-dir", type=Path, default=cfg.OUTPUT_DIR / "structure_scores")
     parser.add_argument("--workers", type=int, default=1)
@@ -40,14 +40,16 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    compute_script = cfg.PROJECT_ROOT / "scripts" / "msa_OGT" / "15_compute_solubility_aggregability.py"
+    if not args.query_pdb.exists():
+        raise SystemExit(f"ERROR: query PDB is required for vulnerability analysis: {args.query_pdb}")
+    compute_script = Path(__file__).resolve().parent / "structure_score_merge.py"
     camsol_out = args.out_dir / "camsol"
     aggrescan_out = args.out_dir / "aggrescan3d"
     cmd = [
         str(args.python),
         str(compute_script),
         "--afdb-dir", str(args.afdb_dir),
-        "--ankros-pdb", str(args.query_pdb),
+        "--query-pdb", str(args.query_pdb),
         "--out-dir", str(args.out_dir),
         "--camsol-out-dir", str(camsol_out),
         "--aggrescan3d-out-dir", str(aggrescan_out),

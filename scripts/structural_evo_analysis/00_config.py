@@ -13,21 +13,49 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-OUTPUT_DIR = Path(os.environ.get("SEA_OUT_DIR", PROJECT_ROOT / "results" / "structural_evo_analysis"))
-STRUCTURE_DIR = Path(os.environ.get("SEA_STRUCTURE_DIR", PROJECT_ROOT / "structures" / "structural_evo_analysis"))
+DEFAULT_WORK_DIR = Path(os.environ.get("SEA_WORK_DIR", Path.home() / "structural_evo_analysis"))
+OUTPUT_DIR = Path(os.environ.get("SEA_OUT_DIR", DEFAULT_WORK_DIR / "results"))
+STRUCTURE_DIR = Path(os.environ.get("SEA_STRUCTURE_DIR", DEFAULT_WORK_DIR / "structures"))
 DEFAULT_QUERY_FASTA = PROJECT_ROOT / "sequences" / "photoHymenobact.fa"
-DEFAULT_OGT_TSV = PROJECT_ROOT / "data" / "growth_temp_dataset_OGTFinder.tsv"
+DEFAULT_OGT_SUMMARY_TSV = PROJECT_ROOT / "data" / "ogt_taxid_summary.tsv"
+DEFAULT_OGT_TSV = Path(os.environ.get("SEA_OGT_TSV", DEFAULT_OGT_SUMMARY_TSV))
 UNIREF_DIR = Path(os.environ.get("UNIREF_DIR", Path.home() / "databases"))
 DEFAULT_DB_NAME = os.environ.get("SEA_DB", os.environ.get("UNIREF_DB", "uniref90"))
-DEFAULT_DB_FASTA = Path(
-    os.environ.get("SEA_DB_FASTA", UNIREF_DIR / DEFAULT_DB_NAME / f"{DEFAULT_DB_NAME}.fasta.gz")
-)
-DEFAULT_DB_MMSEQS = Path(
-    os.environ.get("SEA_DB_MMSEQS", UNIREF_DIR / DEFAULT_DB_NAME / f"{DEFAULT_DB_NAME}_db")
-)
 N_THREADS = int(os.environ.get("SEA_THREADS", "8"))
 
 AA_SET = set("ACDEFGHIKLMNPQRSTVWY")
+
+
+def normalize_db_name(value: str | None) -> str:
+    """Normalize UniRef shorthand such as 50/90/100 to uniref50-style names."""
+    text = (value or "uniref90").strip()
+    if text in {"50", "90", "100"}:
+        return f"uniref{text}"
+    if text.lower() in {"uniref50", "uniref90", "uniref100"}:
+        return text.lower()
+    return text
+
+
+DEFAULT_DB_NAME = normalize_db_name(DEFAULT_DB_NAME)
+
+
+def default_db_fasta(db_name: str | None = None) -> Path:
+    name = normalize_db_name(db_name or DEFAULT_DB_NAME)
+    return UNIREF_DIR / name / f"{name}.fasta.gz"
+
+
+def default_db_mmseqs(db_name: str | None = None, db_fasta: Path | None = None) -> Path:
+    name = normalize_db_name(db_name or DEFAULT_DB_NAME)
+    if db_fasta is not None:
+        fasta = Path(db_fasta)
+        suffixes = "".join(fasta.suffixes)
+        stem = fasta.name.removesuffix(suffixes) if suffixes else fasta.stem
+        return fasta.parent / f"{stem}_db"
+    return UNIREF_DIR / name / f"{name}_db"
+
+
+DEFAULT_DB_FASTA = Path(os.environ.get("SEA_DB_FASTA", default_db_fasta(DEFAULT_DB_NAME)))
+DEFAULT_DB_MMSEQS = Path(os.environ.get("SEA_DB_MMSEQS", default_db_mmseqs(DEFAULT_DB_NAME, DEFAULT_DB_FASTA)))
 
 
 def resolve_bin(name: str) -> str:
@@ -163,7 +191,7 @@ def regime_of(ogt: float | None, psychro_max: float = 20.0, thermo_min: float = 
 
 
 class OGTFinderLookup:
-    """Taxid-first lookup for the committed growth-temperature table."""
+    """Taxid-first lookup for summarized or raw growth-temperature metadata."""
 
     fields = [
         "ogt", "regime", "ogt_match_type", "ogt_taxid", "ogt_species_id",
@@ -178,14 +206,54 @@ class OGTFinderLookup:
         self.optimum_by_taxid: dict[str, list[dict[str, object]]] = {}
         self.optimum_by_species_id: dict[str, list[dict[str, object]]] = {}
         self.optimum_by_species_name: dict[str, list[dict[str, object]]] = {}
+        self.summary_by_taxid: dict[str, dict[str, str]] = {}
+        self.summary_by_species_name: dict[str, dict[str, str]] = {}
         if path.exists():
-            self._load()
+            with path.open(newline="") as handle:
+                reader = csv.DictReader(handle, delimiter="\t")
+                fields = set(reader.fieldnames or [])
+            if {"taxid", "ogt", "ogt_match_type"}.issubset(fields):
+                self._load_summary()
+            else:
+                self._load_raw()
 
-    def _load(self) -> None:
+    @staticmethod
+    def _clean_id(value: str) -> str:
+        text = (value or "").strip()
+        return "" if text.lower() == "nan" else text
+
+    def _load_summary(self) -> None:
         with self.path.open(newline="") as handle:
             for row in csv.DictReader(handle, delimiter="\t"):
-                taxid = (row.get("ncbiTaxID_new") or "").strip()
-                species_id = (row.get("species_id") or "").strip()
+                taxid = self._clean_id(row.get("taxid", ""))
+                if not taxid or not row.get("ogt", ""):
+                    continue
+                summary = {
+                    "ogt": row.get("ogt", ""),
+                    "regime": row.get("regime", ""),
+                    "ogt_match_type": row.get("ogt_match_type", ""),
+                    "ogt_taxid": taxid,
+                    "ogt_species_id": row.get("species_taxid", ""),
+                    "ogt_species": row.get("species_name", ""),
+                    "ogt_raw_temps": row.get("ogt_raw_temps", ""),
+                    "ogt_sources": row.get("ogt_sources", ""),
+                    "ogt_types": "optimum",
+                    "ogt_source_ids": row.get("ogt_source_ids", ""),
+                    "ogt_parse_modes": row.get("ogt_parse_modes", ""),
+                    "ogt_has_range": row.get("ogt_has_range", ""),
+                    "ogt_range_count": row.get("ogt_range_count", ""),
+                    "ogt_row_count": row.get("ogt_row_count", ""),
+                }
+                self.summary_by_taxid[taxid] = summary
+                species_name = " ".join((row.get("species_name") or "").split())
+                if species_name:
+                    self.summary_by_species_name.setdefault(species_name, summary)
+
+    def _load_raw(self) -> None:
+        with self.path.open(newline="") as handle:
+            for row in csv.DictReader(handle, delimiter="\t"):
+                taxid = self._clean_id(row.get("ncbiTaxID_new", ""))
+                species_id = self._clean_id(row.get("species_id", ""))
                 species = " ".join((row.get("species") or "").split())
                 if taxid and species_id:
                     self.taxid_to_species_id.setdefault(taxid, species_id)
@@ -216,6 +284,24 @@ class OGTFinderLookup:
     def lookup(self, taxid: str, organism: str = "") -> dict[str, str]:
         taxid = (taxid or "").strip()
         organism = " ".join((organism or "").split())
+        if self.summary_by_taxid:
+            if taxid and taxid in self.summary_by_taxid:
+                return dict(self.summary_by_taxid[taxid])
+            if organism:
+                summary = self.summary_by_species_name.get(organism)
+                match_type = "name_exact"
+                if summary is None:
+                    parts = organism.split()
+                    if len(parts) >= 2 and parts[1] != "sp.":
+                        summary = self.summary_by_species_name.get(f"{parts[0]} {parts[1]}")
+                        match_type = "name_binomial" if summary else "none"
+                if summary is not None:
+                    out = dict(summary)
+                    out["ogt_match_type"] = match_type
+                    out["ogt_taxid"] = taxid
+                    return out
+            return {field: "" for field in self.fields}
+
         records: list[dict[str, object]] = []
         match_type = "none"
         match_taxid = ""

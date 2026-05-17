@@ -13,7 +13,7 @@ query FASTA
   -> MMseqs2 homolog search
   -> MAFFT MSA
   -> IQ-TREE phylogeny
-  -> metadata-driven clade annotation
+  -> OGT/regime clade annotation
   -> conserved-position tables
   -> optional AFDB download and structure scoring
 ```
@@ -28,10 +28,11 @@ scripts/
 └── msa_OGT/                   legacy ANKros-specific reference code
 ```
 
-`scripts/msa_OGT/15_compute_solubility_aggregability.py` and its scorer modules
-are still reused by `structural_evo_analysis/07_score_structures.py`. Other
-`msa_OGT` steps are retained as reference material and should not drive new
-skill behavior unless they are deliberately generalized.
+`scripts/structural_evo_analysis/` is self-contained for the maintained
+workflow, including structure scoring. The legacy `msa_OGT` scorer entrypoints
+are compatibility wrappers around the structural-evolution implementations.
+Other `msa_OGT` steps are retained as reference material and should not drive
+new skill behavior unless they are deliberately generalized.
 
 ## Long Runs
 
