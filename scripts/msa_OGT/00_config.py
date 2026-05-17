@@ -18,7 +18,7 @@ from pathlib import Path
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-QUERY_FASTA = PROJECT_ROOT / "sequences" / "photoHymenobact.fa"
+QUERY_FASTA = PROJECT_ROOT / "test" / "photoHymenobact.fa"
 
 UNIREF_DIR = Path(os.environ.get("UNIREF_DIR", Path.home() / "databases"))
 DATABASES = {
@@ -40,7 +40,7 @@ ACTIVE_DB_MMSEQS = DATABASES[ACTIVE_DB_NAME]["mmseqs_db"]
 OUTPUT_DIR = Path(os.environ.get("MSA_OGT_OUT_DIR", PROJECT_ROOT / "results" / "msa_OGT"))
 INTER_DIR = OUTPUT_DIR
 
-REF_DIR = PROJECT_ROOT / "sequences"
+REF_DIR = PROJECT_ROOT / "test"
 UNIPROT_CLASSI_CPD = REF_DIR / "uniprot_classI_cpd.fa"
 CLASSII_KNOWN = REF_DIR / "classII_known.fa"
 OTHER_KNOWN = REF_DIR / "other_known.fa"

@@ -23,17 +23,20 @@ outside the skill directory.
 ## Inputs
 
 - Single-sequence protein FASTA. The bundled test query is
-  `sequences/photoHymenobact.fa`.
+  `test/photoHymenobact.fa`.
 - Query PDB structure. This is required for vulnerability ranking. Provide it
   with `SEA_QUERY_PDB` or `--query-pdb`, or place it at
-  `~/structural_evo_analysis/structures/query.pdb`.
+  `~/structural_evo_analysis/structures/query.pdb`. If a small real test
+  structure is committed, `SEA_QUERY_PDB=test/query.pdb` is suitable for smoke
+  tests. MSA-only and conservation-only runs do not require a PDB.
 - Local protein database FASTA, usually UniRef. Configure with
   `SEA_DB_FASTA`/`SEA_DB_MMSEQS`, or with `UNIREF_DIR` and `SEA_DB`.
   UniRef shorthand values `50`, `90`, `100`, `uniref50`, `uniref90`, and
   `uniref100` are accepted by `SEA_DB` and step 01 `--db-name`.
   Ask for the database location before running. If it needs downloading, use
   `prepare_uniref_database.py --download` only after user approval.
-- OGT metadata for MSA annotations. Step 01 automatically adds taxonomy-derived
+- OGT metadata for OGT-aware annotations. Step 01 does not join OGT metadata by
+  default; use `SEA_OGT_AWARE=1` or step 01 `--join-ogt` to add taxonomy-derived
   OGT metadata from `data/ogt_taxid_summary.tsv` when hit headers contain
   `TaxID=`.
 
@@ -44,12 +47,20 @@ Run long jobs in `tmux`:
 ```bash
 mkdir -p logs
 tmux new -s structural-evo \
-  'SEA_QUERY_PDB=/path/to/query.pdb SEA_WORK_DIR=~/structural_evo_analysis bash scripts/structural_evo_analysis/run_pipeline.sh sequences/photoHymenobact.fa 2>&1 | tee logs/photoHymenobact_example.log'
+  'SEA_QUERY_PDB=/path/to/query.pdb SEA_WORK_DIR=~/structural_evo_analysis bash scripts/structural_evo_analysis/run_pipeline.sh test/photoHymenobact.fa 2>&1 | tee logs/photoHymenobact_example.log'
+```
+
+For MSA-only work, use:
+
+```bash
+SEA_PIPELINE_MODE=msa \
+  bash scripts/structural_evo_analysis/run_pipeline.sh test/photoHymenobact.fa
 ```
 
 OGT enrichment is optional; omit the metadata and trait arguments when the goal
-is diverse-subset vulnerability ranking. Set `SEA_OGT_AWARE=1` to run OGT clade
-enrichment and clade-aware logos/viewers. For manual OGT clade enrichment, pass
+is diversity-first vulnerability ranking with no OGT join during search. Set
+`SEA_OGT_AWARE=1` to join OGT metadata during step 01, run OGT clade enrichment,
+and make logos/viewers clade-aware. For manual OGT clade enrichment, pass
 `repset_metadata.tsv ogt` and set `SEA_LOW_THRESHOLD`/`SEA_HIGH_THRESHOLD`; for
 OGT, the example thresholds use `ogt <= 20` as low and `ogt >= 45` as high.
 
@@ -71,7 +82,8 @@ Prepare or validate the UniRef database explicitly before step 01:
 
 ```bash
 ./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py \
-  --query sequences/photoHymenobact.fa \
+  --query test/photoHymenobact.fa \
+  --join-ogt \
   --out-dir results/photoHymenobact_example
 
 ./envs/structural_evo/bin/python scripts/structural_evo_analysis/02_align_mafft.py \
@@ -143,7 +155,8 @@ raw OGTFinder table with:
 ## Outputs
 
 - `mmseqs_search_results.tsv`: raw MMseqs hit table.
-- `hits_metadata.tsv`: hit metadata, filters, taxonomy, and OGT join status.
+- `hits_metadata.tsv`: hit metadata, filters, taxonomy, and optional OGT join
+  fields.
 - `repset.fa`: query plus retained homologs.
 - `repset_metadata.tsv`: metadata keyed by tree-tip IDs.
 - `repset_aligned.fa`: MAFFT MSA.
@@ -177,9 +190,9 @@ Do not change these silently. Record overrides in logs or run manifests.
 
 ## Limitations
 
-- The OGT join depends on usable taxonomy in hit headers. For non-UniRef
-  databases, provide a metadata TSV keyed by sequence ID or ensure headers
-  include `TaxID=`.
+- The optional OGT join depends on usable taxonomy in hit headers. For
+  non-UniRef databases, provide a metadata TSV keyed by sequence ID or ensure
+  headers include `TaxID=`.
 - The CamSol implementation used by step 07 is a transparent local
   approximation, not the closed CamSol server.
 - Aggrescan3D scoring requires `bash setup_envs.sh --with-aggrescan3d`.

@@ -14,7 +14,7 @@ positions, score available query/AFDB structures for solubility/aggregability,
 and rank vulnerable query-enzyme positions. OGT enrichment/clade analysis is
 optional context, not the default endpoint.
 
-The ANKros/photolyase sequence in `sequences/photoHymenobact.fa` is the bundled
+The ANKros/photolyase sequence in `test/photoHymenobact.fa` is the bundled
 test query. Do not hard-code ANKros-specific residue ranges, domain boundaries,
 thresholds, or biological interpretations into the generalized pipeline.
 
@@ -29,11 +29,13 @@ thresholds, or biological interpretations into the generalized pipeline.
 
 ## Main Inputs
 
-- Query FASTA: `sequences/photoHymenobact.fa` for the example, or a user
+- Query FASTA: `test/photoHymenobact.fa` for the example, or a user
   supplied single-protein FASTA.
 - Query PDB: required for vulnerability ranking. The user should provide a
   crystal, AF3, AlphaFold, or other query structure via `SEA_QUERY_PDB` or
-  `~/structural_evo_analysis/structures/query.pdb`.
+  `~/structural_evo_analysis/structures/query.pdb`. If a small real test
+  structure is committed, use `SEA_QUERY_PDB=test/query.pdb` for local smoke
+  tests.
 - Search database: a local protein FASTA such as UniRef, configured with
   `SEA_DB_FASTA`/`SEA_DB_MMSEQS` or `UNIREF_DIR`/`SEA_DB`. UniRef shorthand
   values `50`, `90`, `100`, `uniref50`, `uniref90`, and `uniref100` are
@@ -41,8 +43,9 @@ thresholds, or biological interpretations into the generalized pipeline.
   whether to download UniRef and use `prepare_uniref_database.py --download`
   only after approval.
 - Metadata: `data/ogt_taxid_summary.tsv` is the only bundled data file and the
-  default taxonomy-keyed OGT source. Step 01 propagates `TaxID=` from
-  UniRef-style headers and joins OGT/regime values into `repset_metadata.tsv`.
+  taxonomy-keyed OGT source for OGT-aware mode. Non-OGT runs should not join OGT
+  during search. Step 01 propagates `TaxID=` from UniRef-style headers and joins
+  OGT/regime values into `repset_metadata.tsv` only when `--join-ogt` is used.
 - Structures: AlphaFold DB PDB files downloaded by step 06 under
   `~/structural_evo_analysis/structures/afdb/` by default; the required query
   PDB can be provided with `SEA_QUERY_PDB` or placed at
@@ -99,7 +102,7 @@ Run full searches, IQ-TREE jobs, AFDB downloads, and structure scoring in
 ```bash
 mkdir -p logs
 tmux new -s structural-evo \
-  'SEA_QUERY_PDB=/path/to/query.pdb SEA_WORK_DIR=~/structural_evo_analysis bash scripts/structural_evo_analysis/run_pipeline.sh sequences/photoHymenobact.fa 2>&1 | tee logs/photoHymenobact_example.log'
+  'SEA_QUERY_PDB=/path/to/query.pdb SEA_WORK_DIR=~/structural_evo_analysis bash scripts/structural_evo_analysis/run_pipeline.sh test/photoHymenobact.fa 2>&1 | tee logs/photoHymenobact_example.log'
 ```
 
 Record the command, working directory, inputs, outputs/logs, relevant
@@ -111,6 +114,8 @@ environment variables, and how to monitor or stop the task.
 - Treat `vulnerability/top_vulnerable_positions.tsv` as the primary maintained
   endpoint. OGT/regime clade enrichment is optional context and enabled with
   `SEA_OGT_AWARE=1`.
+- For non-OGT runs, do not join OGT during search; prioritize the diverse
+  query-identity-stratified representative set.
 - Do not silently change defaults, search thresholds, clade thresholds, filters,
   or scoring parameters.
 - Keep new outputs under `~/structural_evo_analysis/results/` or a
@@ -118,6 +123,8 @@ environment variables, and how to monitor or stop the task.
 - Keep downloaded/generated structures under
   `~/structural_evo_analysis/structures/` or a user-selected
   `SEA_WORK_DIR`/`SEA_STRUCTURE_DIR`.
+- Keep committed example inputs under `test/`; do not use repository-level
+  `structures/` or `sequences/` directories for new inputs.
 - Treat `scripts/msa_OGT/` as legacy/reference code. Its scorer entrypoints are
   compatibility wrappers around `scripts/structural_evo_analysis/`.
 - Update documentation when behavior, inputs, outputs, parameters,

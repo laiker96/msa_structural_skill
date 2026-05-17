@@ -32,7 +32,7 @@ ALIGNED_FA = cfg.INTER_DIR / "repset_hmmalign.fa"
 ALIGNED_MATCH_FA = cfg.INTER_DIR / "repset_hmmalign_matchcols.fa"
 
 HMM_DIR = cfg.INTER_DIR / "hmm"
-SEED_FA = cfg.PROJECT_ROOT / "sequences" / "uniprot_classI_cpd.fa"
+SEED_FA = cfg.PROJECT_ROOT / "test" / "uniprot_classI_cpd.fa"
 SEED_ALN = HMM_DIR / "classI_seed_mafft.fa"
 PROFILE_HMM = HMM_DIR / "classI_profile.hmm"
 HMM_ALIGN_RAW = HMM_DIR / "repset_hmmalign.afa"

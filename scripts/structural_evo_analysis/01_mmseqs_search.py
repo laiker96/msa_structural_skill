@@ -46,9 +46,10 @@ def parse_args() -> argparse.Namespace:
         "--ogt-metadata",
         type=Path,
         default=cfg.DEFAULT_OGT_TSV,
-        help="Optional OGT metadata TSV. Supports data/ogt_taxid_summary.tsv or an external raw OGTFinder table.",
+        help="OGT metadata TSV used only with --join-ogt. Supports data/ogt_taxid_summary.tsv or an external raw OGTFinder table.",
     )
-    parser.add_argument("--no-ogt", action="store_true", help="Do not join OGT/regime metadata.")
+    parser.add_argument("--join-ogt", action="store_true", help="Join OGT/regime metadata into hit tables.")
+    parser.add_argument("--no-ogt", action="store_true", help="Deprecated no-op; OGT joins are disabled unless --join-ogt is set.")
     parser.add_argument("--sensitivity", type=float, default=float(os.environ.get("SEA_MMSEQS_S", "7.5")))
     parser.add_argument("--evalue", default=os.environ.get("SEA_MMSEQS_E", "1e-5"))
     parser.add_argument("--min-seq-id", type=float, default=float(os.environ.get("SEA_MIN_SEQ_ID", "0.05")))
@@ -217,7 +218,7 @@ def write_outputs(args: argparse.Namespace, hits_tsv: Path, all_fa: Path) -> Non
         found = extract_hits(set(hits), args.db_fasta, all_fa)
         print(f"Extracted {found}/{len(hits)} database hits into {all_fa}")
     entries = cfg.read_fasta(all_fa)
-    lookup = None if args.no_ogt else cfg.OGTFinderLookup(args.ogt_metadata)
+    lookup = cfg.OGTFinderLookup(args.ogt_metadata) if args.join_ogt and not args.no_ogt else None
     rows = []
     passed_entries = []
     for sid, header, seq in entries:

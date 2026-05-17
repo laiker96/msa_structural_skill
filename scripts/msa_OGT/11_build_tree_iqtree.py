@@ -11,7 +11,7 @@ columns for:
 
 from the refined full-domain alignment, writes a dedicated tree MSA, and runs
 IQ-TREE with a fixed seed/thread count for reproducibility. By default, curated
-class II CPD photolyase outgroups from sequences/outgroup.fa are added with
+class II CPD photolyase outgroups from test/outgroup.fa are added with
 MAFFT --add --keeplength and passed to IQ-TREE with -o.
 """
 from __future__ import annotations
@@ -32,7 +32,7 @@ cfg = import_module("00_config")
 ALN_FA = cfg.INTER_DIR / "repset_hmmalign_linker_refined.fa"
 COL_MAP = cfg.INTER_DIR / "repset_hmmalign_linker_refined_column_map.tsv"
 TREE_DIR = cfg.INTER_DIR / "tree_antenna_catalytic"
-OUTGROUP_FA = cfg.PROJECT_ROOT / "sequences" / "outgroup.fa"
+OUTGROUP_FA = cfg.PROJECT_ROOT / "test" / "outgroup.fa"
 IQTREE_BIN = cfg.resolve_bin("iqtree")
 MAFFT_BIN = cfg.resolve_bin("mafft")
 
@@ -348,7 +348,7 @@ def main():
     parser.add_argument("--domains", default="antenna,catalytic",
                         help="Comma-separated domain names. Default: antenna,catalytic")
     parser.add_argument("--outgroup", default=str(OUTGROUP_FA),
-                        help="Outgroup FASTA to add with MAFFT --add. Default: sequences/outgroup.fa")
+                        help="Outgroup FASTA to add with MAFFT --add. Default: test/outgroup.fa")
     parser.add_argument("--no-outgroup", action="store_true",
                         help="Do not add outgroups; build an unrooted tree.")
     parser.add_argument("--prepare-only", action="store_true",

@@ -9,11 +9,13 @@ residue-level vulnerability ranking.
 The bundled example query is:
 
 ```text
-sequences/photoHymenobact.fa
+test/photoHymenobact.fa
 ```
 
 A query PDB is required. Provide it with `SEA_QUERY_PDB=/path/to/query.pdb` or
-place it at `~/structural_evo_analysis/structures/query.pdb`.
+place it at `~/structural_evo_analysis/structures/query.pdb` for structure
+scoring or full vulnerability analysis. MSA-only and conservation-only runs do
+not require a PDB.
 
 The only bundled metadata table is `data/ogt_taxid_summary.tsv`, a compact
 taxid-keyed OGT table used when database hit headers include `TaxID=` values,
@@ -26,8 +28,7 @@ scripts/structural_evo_analysis/   main self-contained pipeline
 scripts/msa_OGT/                   legacy/reference code with scorer wrappers
 config/                            minimal conda environment specs
 data/                              OGT metadata used for clade annotation
-sequences/                         bundled example query FASTA
-structures/                        downloaded or user-provided structures
+test/                              small committed test inputs
 results/                           generated pipeline outputs
 logs/                              local run logs
 ```
@@ -83,6 +84,8 @@ install because conda solves can be slow.
 
 Before running an analysis as a skill, the agent should ask whether to use the
 default `~/structural_evo_analysis` work directory or a user-selected directory.
+Committed test inputs live under `test/`; generated/downloaded structures stay
+under the runtime work directory unless explicitly overridden.
 
 ## External Database
 
@@ -115,11 +118,11 @@ Examples:
 ```bash
 export SEA_DB=uniref50
 ./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py \
-  --query sequences/photoHymenobact.fa \
+  --query test/photoHymenobact.fa \
   --out-dir results/photoHymenobact_uniref50
 
 ./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py \
-  --query sequences/photoHymenobact.fa \
+  --query test/photoHymenobact.fa \
   --db-name 100 \
   --out-dir results/photoHymenobact_uniref100
 ```
@@ -142,18 +145,28 @@ Full searches, tree inference, downloads, and scoring can be long-running. Use
 ```bash
 mkdir -p logs
 tmux new -s structural-evo \
-  'SEA_QUERY_PDB=/path/to/query.pdb SEA_WORK_DIR=~/structural_evo_analysis bash scripts/structural_evo_analysis/run_pipeline.sh sequences/photoHymenobact.fa 2>&1 | tee logs/photoHymenobact_example.log'
+  'SEA_QUERY_PDB=/path/to/query.pdb SEA_WORK_DIR=~/structural_evo_analysis bash scripts/structural_evo_analysis/run_pipeline.sh test/photoHymenobact.fa 2>&1 | tee logs/photoHymenobact_example.log'
 ```
 
-That command uses the bundled query, joins the committed OGT metadata during
-step 01, builds a diverse MSA subset, scores available structures, and writes
-the vulnerability report. OGT enrichment is optional; to call low/mid/high OGT
-clades, pass `repset_metadata.tsv ogt` and set thresholds:
+For MSA-only work, stop after diverse representative selection and MAFFT:
 
 ```bash
-SEA_LOW_THRESHOLD=20 SEA_HIGH_THRESHOLD=45 \
+SEA_PIPELINE_MODE=msa \
+  bash scripts/structural_evo_analysis/run_pipeline.sh test/photoHymenobact.fa
+```
+
+The full command uses the bundled query, joins the committed OGT metadata
+during step 01 only when OGT-aware mode is enabled, builds a diverse MSA
+subset, scores available structures, and writes the vulnerability report.
+Without OGT-aware mode, step 01 prioritizes a diverse
+query-identity-stratified representative set and does not add OGT columns. OGT
+enrichment is optional. The recommended OGT-aware wrapper call is:
+
+```bash
+SEA_OGT_AWARE=1 SEA_QUERY_PDB=/path/to/query.pdb \
+  SEA_LOW_THRESHOLD=20 SEA_HIGH_THRESHOLD=45 \
   bash scripts/structural_evo_analysis/run_pipeline.sh \
-  sequences/photoHymenobact.fa results/photoHymenobact_example/repset_metadata.tsv ogt
+  test/photoHymenobact.fa
 ```
 
 By default, step 01 builds the MSA from a diverse query-identity-stratified
@@ -167,7 +180,7 @@ tree/alignment clade coloring with `SEA_OGT_AWARE=1`.
 
 ## OGT Metadata
 
-Use `data/ogt_taxid_summary.tsv` for agent-facing inspection and default
+Use `data/ogt_taxid_summary.tsv` for agent-facing inspection and OGT-aware
 pipeline joins. It has one resolved OGT row per covered NCBI taxid, with
 taxid/name/species/OGT/regime first, followed by provenance fields such as
 source table rows, raw temperatures, source IDs, and whether the value came
@@ -186,7 +199,8 @@ Run steps manually when you need tighter control:
 
 ```bash
 ./envs/structural_evo/bin/python scripts/structural_evo_analysis/01_mmseqs_search.py \
-  --query sequences/photoHymenobact.fa \
+  --query test/photoHymenobact.fa \
+  --join-ogt \
   --out-dir results/photoHymenobact_example
 
 ./envs/structural_evo/bin/python scripts/structural_evo_analysis/02_align_mafft.py \
@@ -229,7 +243,7 @@ results/<run>/viewers/alignment.html
 
 - Keep the skill focused on `scripts/structural_evo_analysis/`.
 - Load `scripts/structural_evo_analysis/README.md` for step-level details.
-- Use `sequences/photoHymenobact.fa` as the reproducible example query.
+- Use `test/photoHymenobact.fa` as the reproducible example query.
 - Use `data/ogt_taxid_summary.tsv` only as metadata; do not treat it as
   sequence input.
 - Prefer explicit environment variables and output directories so runs are
